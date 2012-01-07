@@ -19,7 +19,7 @@ from __future__ import generators
 
 try:
     import sys, os, time, sched, re, getopt, fnmatch
-    import types, resource, getpass, glob, linecache
+    import types, resource, getpass, glob, linecache, platform
 except KeyboardInterrupt:
     pass
 
@@ -69,6 +69,11 @@ pluginpath = [
     '/usr/share/dstat/',
     '/usr/local/share/dstat/',
 ]
+
+if platform.system() == 'FreeBSD':
+	procfs_path = '/usr/compat/linux/proc/'
+else:
+	procfs_path = procfs_path + ''
 
 class Options:
     def __init__(self, args):
@@ -564,7 +569,7 @@ class dstat_aio(dstat):
         self.vars = ('aio',)
         self.type = 'd'
         self.width = 5;
-        self.open('/proc/sys/fs/aio-nr')
+        self.open(procfs_path + 'sys/fs/aio-nr')
 
     def extract(self):
         for l in self.splitlines():
@@ -577,7 +582,7 @@ class dstat_cpu(dstat):
         self.type = 'p'
         self.width = 3
         self.scale = 34
-        self.open('/proc/stat')
+        self.open(procfs_path + 'stat')
         self.cols = 6
 
     def discover(self, *objlist):
@@ -638,7 +643,7 @@ class dstat_cpu24(dstat):
         self.type = 'p'
         self.width = 3
         self.scale = 34
-        self.open('/proc/stat')
+        self.open(procfs_path + 'stat')
         self.cols = 3
 
     def discover(self, *objlist):
@@ -693,7 +698,7 @@ class dstat_disk(dstat):
         self.nick = ('read', 'writ')
         self.type = 'b'
         self.diskfilter = re.compile('^(dm-\d+|md\d+|[hsv]d[a-z]+\d+)$')
-        self.open('/proc/diskstats')
+        self.open(procfs_path + 'diskstats')
         self.cols = 2
 
     def discover(self, *objlist):
@@ -759,7 +764,7 @@ class dstat_disk24(dstat):
         self.nick = ('read', 'writ')
         self.type = 'b'
         self.diskfilter = re.compile('(dm-\d+|md\d+|[hsv]d[a-z]+\d+)')
-        self.open('/proc/partitions')
+        self.open(procfs_path + 'partitions')
         if self.fd and not self.discover:
             raise Exception, 'Kernel has no per-partition I/O accounting [CONFIG_BLK_STATS], use at least 2.4.20'
         self.cols = 2
@@ -825,7 +830,7 @@ class dstat_disk24_old(dstat):
         self.type = 'b'
         self.diskfilter = re.compile('(dm-\d+|md\d+|[hsv]d[a-z]+\d+)')
         self.regexp = re.compile('^\((\d+),(\d+)\):\(\d+,\d+,(\d+),\d+,(\d+)\)$')
-        self.open('/proc/stat')
+        self.open(procfs_path + 'stat')
         self.cols = 2
 
     def discover(self, *objlist):
@@ -921,11 +926,11 @@ class dstat_fs(dstat):
         self.scale = 1000
 
     def extract(self):
-        for line in dopen('/proc/sys/fs/file-nr'):
+        for line in dopen(procfs_path + 'sys/fs/file-nr'):
             l = line.split()
             if len(l) < 1: continue
             self.val['files'] = long(l[0])
-        for line in dopen('/proc/sys/fs/inode-nr'):
+        for line in dopen(procfs_path + 'sys/fs/inode-nr'):
             l = line.split()
             if len(l) < 2: continue
             self.val['inodes'] = long(l[0]) - long(l[1])
@@ -936,12 +941,12 @@ class dstat_int(dstat):
         self.type = 'd'
         self.width = 5
         self.scale = 1000
-        self.open('/proc/stat')
+        self.open(procfs_path + 'stat')
         self.intmap = self.intmap()
 
     def intmap(self):
         ret = {}
-        for line in dopen('/proc/interrupts'):
+        for line in dopen(procfs_path + 'interrupts'):
             l = line.split()
             if len(l) <= cpunr: continue
             l1 = l[0].split(':')[0]
@@ -1002,7 +1007,7 @@ class dstat_int24(dstat):
         self.type = 'd'
         self.width = 5
         self.scale = 1000
-        self.open('/proc/interrupts')
+        self.open(procfs_path + 'interrupts')
 
     def intmap(self):
         ret = {}
@@ -1073,7 +1078,7 @@ class dstat_io(dstat):
         self.width = 5
         self.scale = 1000
         self.diskfilter = re.compile('(dm-\d+|md\d+|[hsv]d[a-z]+\d+)')
-        self.open('/proc/diskstats')
+        self.open(procfs_path + 'diskstats')
         self.cols = 3
 
     def discover(self, *objlist):
@@ -1144,7 +1149,7 @@ class dstat_ipc(dstat):
 
     def extract(self):
         for name in self.vars:
-            self.val[name] = len(dopen('/proc/sysvipc/'+name).readlines()) - 1
+            self.val[name] = len(dopen(procfs_path + 'sysvipc/'+name).readlines()) - 1
 
 class dstat_load(dstat):
     def __init__(self):
@@ -1154,7 +1159,7 @@ class dstat_load(dstat):
         self.type = 'f'
         self.width = 4
         self.scale = 0.5
-        self.open('/proc/loadavg')
+        self.open(procfs_path + 'loadavg')
 
     def extract(self):
         for l in self.splitlines():
@@ -1171,7 +1176,7 @@ class dstat_lock(dstat):
         self.type = 'f'
         self.width = 3
         self.scale = 10
-        self.open('/proc/locks')
+        self.open(procfs_path + 'locks')
 
     def extract(self):
         for name in self.vars: self.val[name] = 0
@@ -1187,7 +1192,7 @@ class dstat_mem(dstat):
         self.name = 'memory usage'
         self.nick = ('used', 'buff', 'cach', 'free')
         self.vars = ('MemUsed', 'Buffers', 'Cached', 'MemFree')
-        self.open('/proc/meminfo')
+        self.open(procfs_path + 'meminfo')
 
     def extract(self):
         for l in self.splitlines():
@@ -1202,7 +1207,7 @@ class dstat_net(dstat):
         self.nick = ('recv', 'send')
         self.type = 'b'
         self.totalfilter = re.compile('^(lo|bond\d+|face|.+\.\d+)$')
-        self.open('/proc/net/dev')
+        self.open(procfs_path + 'net/dev')
         self.cols = 2
 
     def discover(self, *objlist):
@@ -1264,7 +1269,7 @@ class dstat_page(dstat):
         self.nick = ('in', 'out')
         self.vars = ('pswpin', 'pswpout')
         self.type = 'd'
-        self.open('/proc/vmstat')
+        self.open(procfs_path + 'vmstat')
 
     def extract(self):
         for l in self.splitlines():
@@ -1283,7 +1288,7 @@ class dstat_page24(dstat):
         self.nick = ('in', 'out')
         self.vars = ('pswpin', 'pswpout')
         self.type = 'd'
-        self.open('/proc/stat')
+        self.open(procfs_path + 'stat')
 
     def extract(self):
         for l in self.splitlines():
@@ -1306,7 +1311,7 @@ class dstat_proc(dstat):
         self.type = 'f'
         self.width = 3
         self.scale = 10
-        self.open('/proc/stat')
+        self.open(procfs_path + 'stat')
 
     def extract(self):
         for l in self.splitlines():
@@ -1335,7 +1340,7 @@ class dstat_raw(dstat):
         self.type = 'd'
         self.width = 3
         self.scale = 100
-        self.open('/proc/net/raw')
+        self.open(procfs_path + 'net/raw')
 
     def extract(self):
         lines = -1
@@ -1351,7 +1356,7 @@ class dstat_socket(dstat):
         self.type = 'd'
         self.width = 3
         self.scale = 100
-        self.open('/proc/net/sockstat')
+        self.open(procfs_path + 'net/sockstat')
         self.nick = ('tot', 'tcp', 'udp', 'raw', 'frg')
         self.vars = ('sockets:', 'TCP:', 'UDP:', 'RAW:', 'FRAG:')
 
@@ -1366,7 +1371,7 @@ class dstat_swap(dstat):
         self.name = 'swap'
         self.nick = ('used', 'free')
         self.type = 'd'
-        self.open('/proc/swaps')
+        self.open(procfs_path + 'swaps')
 
     def discover(self, *objlist):
         ret = []
@@ -1418,7 +1423,7 @@ class dstat_swap_old(dstat):
         self.nick = ('used', 'free')
         self.vars = ('SwapUsed', 'SwapFree')
         self.type = 'd'
-        self.open('/proc/meminfo')
+        self.open(procfs_path + 'meminfo')
 
     def extract(self):
         for l in self.splitlines():
@@ -1436,7 +1441,7 @@ class dstat_sys(dstat):
         self.type = 'd'
         self.width = 5
         self.scale = 1000
-        self.open('/proc/stat')
+        self.open(procfs_path + 'stat')
 
     def extract(self):
         for l in self.splitlines():
@@ -1457,7 +1462,7 @@ class dstat_tcp(dstat):
         self.type = 'd'
         self.width = 3
         self.scale = 100
-        self.open('/proc/net/tcp', '/proc/net/tcp6')
+        self.open(procfs_path + 'net/tcp', procfs_path + 'net/tcp6')
 
     def extract(self):
         for name in self.vars: self.val[name] = 0
@@ -1499,7 +1504,7 @@ class dstat_udp(dstat):
         self.type = 'd'
         self.width = 3
         self.scale = 100
-        self.open('/proc/net/udp', '/proc/net/udp6')
+        self.open(procfs_path + 'net/udp', procfs_path + 'net/udp6')
 
     def extract(self):
         for name in self.vars: self.val[name] = 0
@@ -1515,7 +1520,7 @@ class dstat_unix(dstat):
         self.type = 'd'
         self.width = 3
         self.scale = 100
-        self.open('/proc/net/unix')
+        self.open(procfs_path + 'net/unix')
 
     def extract(self):
         for name in self.vars: self.val[name] = 0
@@ -1536,7 +1541,7 @@ class dstat_vm(dstat):
         self.type = 'd'
         self.width = 5
         self.scale = 1000
-        self.open('/proc/vmstat')
+        self.open(procfs_path + 'vmstat')
 
     def extract(self):
         for name in self.vars:
@@ -1559,7 +1564,7 @@ class dstat_vm_adv(dstat_vm):
         self.type = 'd'
         self.width = 5
         self.scale = 1000
-        self.open('/proc/vmstat')
+        self.open(procfs_path + 'vmstat')
 
 class dstat_zones(dstat):
     def __init__(self):
@@ -1571,7 +1576,7 @@ class dstat_zones(dstat):
         self.type = 'd'
         self.width = 5
         self.scale = 1000
-        self.open('/proc/zoneinfo')
+        self.open(procfs_path + 'zoneinfo')
 
     ### Page allocations should include all page zones, not just ZONE_NORMAL,
     ### but also ZONE_DMA, ZONE_HIGHMEM, ZONE_DMA32 (depending on architecture)
@@ -1700,12 +1705,12 @@ def set_theme():
 def ticks():
     "Return the number of 'ticks' since bootup"
     try:
-        for line in open('/proc/uptime', 'r', 0).readlines():
+        for line in open(procfs_path + 'uptime', 'r', 0).readlines():
             l = line.split()
             if len(l) < 2: continue
             return float(l[0])
     except:
-        for line in dopen('/proc/stat').readlines():
+        for line in dopen(procfs_path + 'stat').readlines():
             l = line.split()
             if len(l) < 2: continue
             if l[0] == 'btime':
@@ -1849,7 +1854,7 @@ def proc_splitline(filename, sep=None):
 def proc_pidlist():
     "Return a list of process IDs"
     dstat_pid = str(os.getpid())
-    for pid in os.listdir('/proc/'):
+    for pid in os.listdir(procfs_path + ''):
         try:
             ### Is it a pid ?
             int(pid)
@@ -2122,8 +2127,8 @@ def getnamebypid(pid, name):
     "Return the name of a process by taking best guesses and exclusion"
     ret = None
     try:
-#        cmdline = open('/proc/%s/cmdline' % pid).read().split('\0')
-        cmdline = linecache.getline('/proc/%s/cmdline' % pid, 1).split('\0')
+#        cmdline = open(procfs_path + '%s/cmdline' % pid).read().split('\0')
+        cmdline = linecache.getline(procfs_path + '%s/cmdline' % pid, 1).split('\0')
         ret = basename(cmdline[0])
         if ret in ('bash', 'csh', 'ksh', 'perl', 'python', 'ruby', 'sh'):
             ret = basename(cmdline[1])
@@ -2138,7 +2143,7 @@ def getnamebypid(pid, name):
 def getcpunr():
     "Return the number of CPUs in the system"
     cpunr = -1
-    for line in dopen('/proc/stat').readlines():
+    for line in dopen(procfs_path + 'stat').readlines():
         if line[0:3] == 'cpu':
             cpunr = cpunr + 1
     if cpunr < 0:
